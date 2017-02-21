@@ -24,3 +24,20 @@ Total data: 1.0477 TB
 >sbatch -N 20 test.sh
 ```
 
+Output
+
+```
+Total A: 119.209 GB
+Total B: 953.674 GB
+Total:   1.0477 TB
+A per rank: 254.31 MB
+B per rank: 1.987 GB
+Num procs: 480
+B groups: 10
+
+A dimensions: (200000, 80000)
+B dimensions: (160000, 80000)
+Comm time: 18.277085 (s)
+```
+
+Redistributed data at ~50 GB/s
