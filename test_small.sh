@@ -7,7 +7,9 @@ ncols=80000
 krows=160000
 ngroups=10
 
-N=$((SLURM_NNODES * 24))
+ranks_per_node=32
+
+N=$((SLURM_NNODES * ranks_per_node))
 exe=./distribute-data
 
 echo $SLURM_NNODES $N $nrows $ncols $krows $ngroups

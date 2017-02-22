@@ -4,7 +4,7 @@ Redistribute a large data set into random subsets using one-sided MPI
 Redistribute A(N x M) to NGROUPS random subsets of size B(K x M)
 
 A is distributed by rows to all MPI ranks
-each B is distributed by cols among all MPI ranks in the group's communicator
+B is distributed by rows (or optionally columns) among ranks in the group's communicator
 
 Usage:
 ./memory-estimate Arows Acols Brows Bgroups
@@ -12,32 +12,31 @@ Usage:
 Example:
 
 ```
-> ./memory-estimate 200000 80000 160000 10
-Total A: 119.209 GB
-Total B: 953.674 GB
-Total data: 1.0477 TB
+> ./memory-estimate 1500000 500000 1200000 5
+Total A: 5.4570 TB
+Total B: 21.8279 TB
+Total data:   27.2848 TB
 ```
 
-1 TB / 50 GB / node = 20 Nodes
+27.2848TB / 55GB / node = 496 Nodes
 
 ```
->sbatch -N 20 test.sh
+sbatch -N 512 test_medium.sh
 ```
 
-Output
-
+Output:
 ```
-Total A: 119.209 GB
-Total B: 953.674 GB
-Total:   1.0477 TB
-A per rank: 254.31 MB
-B per rank: 1.987 GB
-Num procs: 480
-B groups: 10
+Total A: 5.4570 TB
+Total B: 21.8279 TB
+Total:   27.2848 TB
+A per rank: 465.66 MB
+B per rank: 1.819 GB
+Num procs: 12288
+B groups: 5
 
-A dimensions: (200000, 80000)
-B dimensions: (160000, 80000)
-Comm time: 18.277085 (s)
+A dimensions: (1500000, 500000)
+B dimensions: (1200000, 500000)
+Comm time: 15.223760 (s)
 ```
 
-Redistributed data at ~50 GB/s
+

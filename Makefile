@@ -1,15 +1,18 @@
-TARGETS= memory-estimate distribute-data
+TARGETS=distribute-data memory-estimate
+OBJS=distribute-data.o bins.o
 
-MPICC=cc
-CC=gcc
+CC=cc
 CFLAGS=-Wall
 
 .PHONY: all clean
 
 all: $(TARGETS)
 
-distribute-data: distribute-data.c
-	$(MPICC) $(CFLAGS) $(CPPFLAGS) $< -o $@
+distribute-data: $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+memory-estimate: memory-estimate.c
+	gcc -o $@ $^
 
 clean:
-	rm -f $(TARGETS)
+	rm -f $(TARGETS) $(OBJS)
