@@ -38,7 +38,8 @@ int main(int argc, char** argv) {
 
   int i,j;
   int rank, nprocs;
-  long size;
+
+  double *A, *B;
 
   MPI_Init(&argc, &argv);
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
@@ -59,8 +60,8 @@ int main(int argc, char** argv) {
       ngroups = atoi(argv[4]);
     }
 
-    long sizeA = (long) nrows * (long) ncols * sizeof(double);
-    long sizeB = (long) ngroups * (long) krows * (long) ncols * sizeof(double);
+    size_t sizeA = (size_t) nrows * (size_t) ncols * sizeof(double);
+    size_t sizeB = (size_t) ngroups * (size_t) krows * (size_t) ncols * sizeof(double);
 
     printf("Total A: %s\n", readable_fs((double) sizeA, buf));
     printf("Total B: %s\n", readable_fs((double) sizeB, buf));
@@ -100,20 +101,19 @@ int main(int argc, char** argv) {
   MPI_Bcast(&ngroups, 1, MPI_INT, 0, MPI_COMM_WORLD);
      
   int local_rows = bin_size_1D(rank, nrows, nprocs);
-
-  double *A;
-  size = (long) local_rows * (long) ncols * sizeof(double);
+  
+  size_t sizeA = (size_t) local_rows * (size_t) ncols * sizeof(double);
   
 #ifdef MPIALLOC
-  MPI_Alloc_mem(size, MPI_INFO_NULL, &A);  
+  MPI_Alloc_mem(sizeA, MPI_INFO_NULL, &A);  
 #else
-  A = (double *) malloc(size);
+  A = (double *) malloc(sizeA);
 #endif
 
-  memset(A, rank, size);
+  memset(A, rank, sizeA);
 
   MPI_Win win;
-  MPI_Win_create(A, size, sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+  MPI_Win_create(A, sizeA, sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 
   int color = bin_coord_1D(rank, nprocs, ngroups);
   MPI_Comm comm_g;
@@ -131,13 +131,12 @@ int main(int argc, char** argv) {
   int qrows = bin_size_1D(rank_g, krows, nprocs_g);
 #endif
 
-  double *B;
-  size = (long) qcols * (long) qrows * sizeof(double);
+  size_t sizeB = (size_t) qcols * (size_t) qrows * sizeof(double);
     
 #ifdef MPIALLOC
-  MPI_Alloc_mem(size, MPI_INFO_NULL, &B);   
+  MPI_Alloc_mem(sizeB, MPI_INFO_NULL, &B);   
 #else  
-  B = (double *) malloc(size);
+  B = (double *) malloc(sizeB);
 #endif
   
 #ifdef BCOLDIST
@@ -151,7 +150,6 @@ int main(int argc, char** argv) {
 #endif
   
   int col_lbound, col_ubound;
-
 #ifdef BCOLDIST
   bin_range_1D(rank_g, ncols, nprocs_g, &col_lbound, &col_ubound);
 #else
