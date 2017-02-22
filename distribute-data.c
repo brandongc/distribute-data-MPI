@@ -105,8 +105,8 @@ char* readable_fs(double size/*in bytes*/, char *buf) {
 }
 
 
-int main(int argc, char** argv) {    
-  char buf[20]; 
+int main(int argc, char** argv) {
+  char buf[20];
 
   int nrows;  // A( nrows X ncols )
   int ncols;
@@ -178,17 +178,9 @@ int main(int argc, char** argv) {
      
   int local_rows = bin_size_1D(rank, nrows, nprocs);
 
-#ifdef DEBUG
-  pprintI("local_rows", local_rows, MPI_COMM_WORLD);
-#endif
-
   double *A;
   size = (long) local_rows * (long) ncols * sizeof(double);
   
-#ifdef DEBUG
-  pprintI("bytes A", local_rows, MPI_COMM_WORLD);
-#endif  
-
 #ifdef MPIALLOC
   MPI_Alloc_mem(size, MPI_INFO_NULL, &A);  
 #else
@@ -203,30 +195,29 @@ int main(int argc, char** argv) {
   int color = bin_coord_1D(rank, nprocs, ngroups);
   MPI_Comm comm_g;
   MPI_Comm_split(MPI_COMM_WORLD, color, rank, &comm_g);
-
-#ifdef DEBUG
-  pprintI("color", color, MPI_COMM_WORLD);
-#endif
   
   int nprocs_g, rank_g;
   MPI_Comm_size(comm_g, &nprocs_g);
   MPI_Comm_rank(comm_g, &rank_g);
-  
+
+#ifdef BCOLDIST
   int qcols = bin_size_1D(rank_g, ncols, nprocs_g);
-  double *B;
-  size = (long) qcols * (long) krows * sizeof(double);
-  
-#ifdef DEBUG
-  pprintI("B cols", qcols, MPI_COMM_WORLD);
-  pprintI("bytes B", size, MPI_COMM_WORLD);
+  int qrows = krows;
+#else
+  int qcols = ncols;
+  int qrows = bin_size_1D(rank_g, krows, nprocs_g);
 #endif
-  
+
+  double *B;
+  size = (long) qcols * (long) qrows * sizeof(double);
+    
 #ifdef MPIALLOC
   MPI_Alloc_mem(size, MPI_INFO_NULL, &B);   
 #else  
   B = (double *) malloc(size);
 #endif
   
+#ifdef BCOLDIST
   int rows_g[krows]; // global index of rows for a work group
   if (rank_g == 0) {
     for (i=0; i<krows; i++) {
@@ -234,40 +225,34 @@ int main(int argc, char** argv) {
     }
   }
   MPI_Bcast(&rows_g, krows, MPI_INT, 0, comm_g);
-  
-#ifdef DEBUG
-  pprint_arrayI("B rows", rows_g, krows, MPI_COMM_WORLD);
 #endif
-
-  int col_lbound, col_ubound;
   
+  int col_lbound, col_ubound;
+
+#ifdef BCOLDIST
   bin_range_1D(rank_g, ncols, nprocs_g, &col_lbound, &col_ubound);
+#else
+  col_lbound = 0;
+  col_ubound = ncols;
+#endif
   
   double t = MPI_Wtime();
 
   MPI_Win_fence(MPI_MODE_NOPUT | MPI_MODE_NOPRECEDE, win);
 
-  int target_rank, target_disp;  
-  for (i=0; i<krows; i++) {
-    target_rank = bin_coord_1D(rows_g[i], nrows, nprocs);
-    target_disp = bin_index_1D(rows_g[i], nrows, nprocs) * ncols + col_lbound;
+  int target_rank, target_disp;
+  for (i=0; i<qrows; i++) {
 
-#ifdef DEBUG
-    for (j=0; j<nprocs; j++) {
-      if (rank == j) {
-	printf("%i: %-20s = %i\n", rank, "row", i);
-	printf("%i: %-20s = %i\n", rank, "row", rows_g[i]);	
-	printf("%i: %-20s = %i\n", rank, "col_off", col_lbound);	
-	printf("%i: %-20s = %i\n", rank, "row_t", bin_index_1D(rows_g[i], nrows, nprocs));
-	printf("%i: %-20s = %i\n", rank, "target_rank", target_rank);
-	printf("%i: %-20s = %i\n", rank, "target_disp", target_disp);
-      }
-      fflush(stdout);
-      MPI_Barrier(MPI_COMM_WORLD);
-    }    
-#endif    
+#ifdef BCOLDIST
+    int trow = rows_g[i];
+#else
+    int trow = (int) random_at_mostL( (long) nrows);
+#endif
+    
+    target_rank = bin_coord_1D(trow, nrows, nprocs);
+    target_disp = bin_index_1D(trow, nrows, nprocs) * ncols + col_lbound;
     MPI_Get( &B[i*qcols], qcols, MPI_DOUBLE, target_rank, target_disp, qcols, MPI_DOUBLE, win);
-  } 
+  }
 
   MPI_Win_fence(MPI_MODE_NOSUCCEED, win);
 
@@ -284,16 +269,13 @@ int main(int argc, char** argv) {
   free(A);
 #endif
 
-
   /* do work on B here */
-
 
 #ifdef MPIALLOC
   MPI_Free_mem(B);
 #else
   free(B);
 #endif
-
 
   MPI_Finalize();
   return 0;
