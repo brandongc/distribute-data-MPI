@@ -27,6 +27,18 @@ char* readable_fs(double size/*in bytes*/, char *buf) {
   return buf;
 }
 
+/*  Only effective if N is much smaller than RAND_MAX */
+void shuffle(int *array, size_t n) {
+  if (n > 1) {
+    size_t i;
+    for (i = 0; i < n - 1; i++) {
+      size_t j = i + rand() / (RAND_MAX / (n - i) + 1);
+      int t = array[j];
+      array[j] = array[i];
+      array[i] = t;
+    }
+  }
+}
 
 int main(int argc, char** argv) {
   char buf[20];
@@ -74,12 +86,6 @@ int main(int argc, char** argv) {
     printf("B groups: %i\n\n", ngroups);
     printf("A dimensions: (%i, %i)\n", nrows, ncols);
     printf("B dimensions: (%i, %i)\n", krows, ncols);
-
-    if ( nprocs / ngroups > ncols) {
-      printf("must have nprocs / ngroups < ncols \n");
-      fflush(stdout);
-      MPI_Abort(MPI_COMM_WORLD, 2);
-    }
       
     if ( nprocs > nrows ) {
       printf("must have nprocs < nrows \n");
@@ -109,7 +115,7 @@ int main(int argc, char** argv) {
   MPI_Win win;
   MPI_Win_create(A, sizeA, sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 
-  int color = bin_coord_1D(rank, nprocs, ngroups);
+  int color = bin_coord_1D(rank, nprocs, ngroups);  
   MPI_Comm comm_g;
   MPI_Comm_split(MPI_COMM_WORLD, color, rank, &comm_g);
   
@@ -121,24 +127,57 @@ int main(int argc, char** argv) {
   int qrows = bin_size_1D(rank_g, krows, nprocs_g);
   size_t sizeB = (size_t) qcols * (size_t) qrows * sizeof(double);    
   B = (double *) malloc(sizeB);
-  
+
+#ifndef SIMPLESAMPLE
+  int *sample;
+  if (rank_g == 0) {
+    sample = malloc( nrows * sizeof(int) );
+    for (i=0; i<nrows; i++) sample[i]=i;
+    shuffle(sample, nrows);
+  } else {
+    sample = NULL;
+  }
+
+  int srows[qrows];
+
+  {
+    int sendcounts[nprocs_g];
+    int displs[nprocs_g];
+
+    for (i=0; i<nprocs_g; i++) {
+      int ubound;
+      bin_range_1D(i, krows, nprocs_g, &displs[i], &ubound);
+      sendcounts[i] = bin_size_1D(i, krows, nprocs_g);
+    }
+   
+    MPI_Scatterv(sample, sendcounts, displs, MPI_INT, &srows, qrows, MPI_INT, 0, comm_g);
+    
+    if (rank_g == 0) free(sample);
+  }
+#endif
+
   double t = MPI_Wtime();
   MPI_Win_fence(MPI_MODE_NOPUT | MPI_MODE_NOPRECEDE, win);
 
   for (i=0; i<qrows; i++) {
+#ifdef SIMPLESAMPLE
     int trow = (int) random_at_mostL( (long) nrows);
+#else
+    int trow = srows[i];
+#endif
     int target_rank = bin_coord_1D(trow, nrows, nprocs);
-    int target_disp = bin_index_1D(trow, nrows, nprocs) * ncols + col_lbound;
+    int target_disp = bin_index_1D(trow, nrows, nprocs) * ncols;
     MPI_Get( &B[i*qcols], qcols, MPI_DOUBLE, target_rank, target_disp, qcols, MPI_DOUBLE, win);
   }
 
   MPI_Win_fence(MPI_MODE_NOSUCCEED, win);
-  double tcomm = MPI_Wtime() - t;
 
+  double tmax, tcomm = MPI_Wtime() - t;
+  MPI_Reduce(&tcomm, &tmax, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
   if (rank == 0) {
-    printf("Comm time: %f (s)\n", tcomm);
+    printf("Comm time: %f (s)\n", tmax);
   }
-
+  
   MPI_Win_free(&win);
   free(A);
   /* do work on B here */
