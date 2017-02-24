@@ -1,6 +1,9 @@
 # distribute-data-MPI
 Redistribute a large data set into random subsets using one-sided MPI
 
+Sampling is done without replacement by default. To sample with replacement compile with
+with -DSIMPLESAMPLING.
+
 Redistribute A(N x M) to NGROUPS random subsets of size B(K x M)
 
 A is distributed by rows to all MPI ranks
