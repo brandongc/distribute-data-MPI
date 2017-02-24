@@ -2,7 +2,7 @@ TARGETS=distribute-data memory-estimate
 OBJS=distribute-data.o bins.o
 
 CC=cc
-CFLAGS=-Wall
+CFLAGS=-g -Wall
 
 .PHONY: all clean
 

@@ -102,14 +102,8 @@ int main(int argc, char** argv) {
      
   int local_rows = bin_size_1D(rank, nrows, nprocs);
   
-  size_t sizeA = (size_t) local_rows * (size_t) ncols * sizeof(double);
-  
-#ifdef MPIALLOC
-  MPI_Alloc_mem(sizeA, MPI_INFO_NULL, &A);  
-#else
+  size_t sizeA = (size_t) local_rows * (size_t) ncols * sizeof(double);  
   A = (double *) malloc(sizeA);
-#endif
-
   memset(A, rank, sizeA);
 
   MPI_Win win;
@@ -123,81 +117,32 @@ int main(int argc, char** argv) {
   MPI_Comm_size(comm_g, &nprocs_g);
   MPI_Comm_rank(comm_g, &rank_g);
 
-#ifdef BCOLDIST
-  int qcols = bin_size_1D(rank_g, ncols, nprocs_g);
-  int qrows = krows;
-#else
   int qcols = ncols;
   int qrows = bin_size_1D(rank_g, krows, nprocs_g);
-#endif
-
-  size_t sizeB = (size_t) qcols * (size_t) qrows * sizeof(double);
-    
-#ifdef MPIALLOC
-  MPI_Alloc_mem(sizeB, MPI_INFO_NULL, &B);   
-#else  
+  size_t sizeB = (size_t) qcols * (size_t) qrows * sizeof(double);    
   B = (double *) malloc(sizeB);
-#endif
-  
-#ifdef BCOLDIST
-  int rows_g[krows]; // global index of rows for a work group
-  if (rank_g == 0) {
-    for (i=0; i<krows; i++) {
-      rows_g[i] = (int) random_at_mostL( (long) nrows);
-    }
-  }
-  MPI_Bcast(&rows_g, krows, MPI_INT, 0, comm_g);
-#endif
-  
-  int col_lbound, col_ubound;
-#ifdef BCOLDIST
-  bin_range_1D(rank_g, ncols, nprocs_g, &col_lbound, &col_ubound);
-#else
-  col_lbound = 0;
-  col_ubound = ncols;
-#endif
   
   double t = MPI_Wtime();
-
   MPI_Win_fence(MPI_MODE_NOPUT | MPI_MODE_NOPRECEDE, win);
 
-  int target_rank, target_disp;
   for (i=0; i<qrows; i++) {
-
-#ifdef BCOLDIST
-    int trow = rows_g[i];
-#else
     int trow = (int) random_at_mostL( (long) nrows);
-#endif
-    
-    target_rank = bin_coord_1D(trow, nrows, nprocs);
-    target_disp = bin_index_1D(trow, nrows, nprocs) * ncols + col_lbound;
+    int target_rank = bin_coord_1D(trow, nrows, nprocs);
+    int target_disp = bin_index_1D(trow, nrows, nprocs) * ncols + col_lbound;
     MPI_Get( &B[i*qcols], qcols, MPI_DOUBLE, target_rank, target_disp, qcols, MPI_DOUBLE, win);
   }
 
   MPI_Win_fence(MPI_MODE_NOSUCCEED, win);
-
   double tcomm = MPI_Wtime() - t;
+
   if (rank == 0) {
     printf("Comm time: %f (s)\n", tcomm);
   }
 
   MPI_Win_free(&win);
-
-#ifdef MPIALLOC
-  MPI_Free_mem(A);
-#else
   free(A);
-#endif
-
   /* do work on B here */
-
-#ifdef MPIALLOC
-  MPI_Free_mem(B);
-#else
   free(B);
-#endif
-
   MPI_Finalize();
   return 0;
 }
