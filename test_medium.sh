@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -p debug
-#SBATCH -t 15
+#SBATCH -t 5
 
 nrows=1500000
 ncols=500000
